@@ -2,11 +2,43 @@ from unidecode import unidecode
 import re
 import numpy as np
 
-Nx = 5
-dimension = 8
-heads = 2
-lr_rate = 0.01
-innerlayer = 2
+nom_du_fichier = "poids.txt"
+
+class Stockage:
+    def __init__(self, nom_du_fichier):
+        self.nom_du_fichier = nom_du_fichier
+        self.ligne = 0
+        with open(nom_du_fichier, "r") as f:
+            try:
+                f.read()[0]
+                self.save = 1
+            except Exception:
+                self.save = 0
+    def read_save(self, value):
+        if self.save == 1:
+            with open(nom_du_fichier, "w") as f:
+                f.write(value)
+        if self.save == 0:
+            with open(nom_du_fichier, "r") as f:
+                f.read()[self.ligne]
+                self.ligne += 1
+                
+Data = Stockage(nom_du_fichier)
+
+if Data.save == 1:
+    Data.read_save([5, 8, 2, 0.01, 2])
+    Nx = 5
+    dimension = 8
+    heads = 2
+    lr_rate = 0.01
+    innerlayer = 2
+else:
+    var = Data.read_save([])
+    Nx = var[0]
+    dimension = var[1]
+    heads = var[2]
+    lr_rate = var[3]
+    innerlayer = var[4]
 
 class Tokenisation:
     def __init__(self):
@@ -241,7 +273,7 @@ class Generative_Pretrained_Transformer:
         self.innerlayer = innerlayer
         self.lr_rate = lr_rate
         self.Token = Tokenisation()
-        corpus = ["love is love. <EOS>", "love is blind. <EOS>", "chess is fun. <EOS>"]
+        corpus = ["Le Petit Bacchus malade ou Autoportrait en Bacchus est un tableau exécuté par Michelangelo Merisi dit le Caravage, probablement en 1593 voire en 1594, et conservé à Rome dans la galerie Borghèse. Réalisée au début de sa période romaine alors qu'il est âgé d'une vingtaine d'années, il s'agit de l'une des toutes premières œuvres répertoriées du peintre lombard. <EOS>"]
         for texte in corpus:
             self.Token.tokenize(texte)
         self.vocab_size = len(self.Token.dictionnaire_token)
@@ -251,14 +283,17 @@ class Generative_Pretrained_Transformer:
         self.matrice_phrase = []
         self.out = []
         
-    def forward(self, sentence):
+    def generate(self, sentence):
         vecteur = [self.Embedding.forward(self.Token.tokenize(str(sentence)))]
         for Nx in range(self.Nx):
             vecteur.append(self.TransformeurObject[Nx].forward(vecteur[-1]))
         self.matrice_phrase = self.Layernormalisation_n.forward(vecteur[-1])
         logits = self.matrice_phrase @ self.W_out
         self.out = np.array([np.exp(x - np.max(x)) / np.exp(x - np.max(x)).sum() for x in logits])
-        return self.out[-1]
+        probs_matrix = self.out[-1]
+        probs_matrix += np.random.randn(self.vocab_size) * 0.05
+        mot_choisi = probs_matrix.tolist().index(np.max(probs_matrix))
+        return list(self.Token.dictionnaire_token.keys())[list(self.Token.dictionnaire_token.values()).index(mot_choisi)]
     
     def backward(self, y_true):
         out_tronque = self.out[:-1]
@@ -276,7 +311,13 @@ class Generative_Pretrained_Transformer:
         self.Embedding.backward(loss_grad)
         
 GPT = Generative_Pretrained_Transformer(Nx, dimension, heads, innerlayer, lr_rate)
-phrase = "love is love."
-phrase += "<EOS>"
-print(GPT.forward(phrase))
+phrase = "Le Petit Bacchus."
+phrase += " <EOS>"
+for i in range(67):
+    mot = GPT.generate(phrase)
+    if mot == "<eos>":
+        break
+    else:
+        phrase += f" {mot}"
+print(phrase)
         
